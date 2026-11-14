@@ -39,6 +39,9 @@ export async function readSystemClipboardText() {
   if (process.platform === "win32") {
     return runPowerShell("[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); Get-Clipboard -Raw");
   }
+  if (process.platform === "darwin") {
+    return runMacosCommand(["/usr/bin/pbpaste", "-Prefer", "txt"]);
+  }
   const backend = clipboardCommand();
   try {
     if (backend === "wl") {
@@ -55,6 +58,10 @@ export async function readSystemClipboardText() {
 export async function writeSystemClipboardText(text: string) {
   if (process.platform === "win32") {
     await runPowerShell("[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())", text);
+    return;
+  }
+  if (process.platform === "darwin") {
+    await runMacosCommand(["/usr/bin/pbcopy"], text);
     return;
   }
   const backend = clipboardCommand();
@@ -81,6 +88,37 @@ let systemTtsChain: Promise<void> = Promise.resolve();
 // All currently-spawned system-TTS processes — keyed by Subprocess so we can
 // `kill()` them when the client calls /api/tts/cancel.
 const activeSystemTtsProcs = new Set<ReturnType<typeof Bun.spawn>>();
+
+// Use stdin for user text, never shell interpolation or command-line arguments.
+// macOS GUI applications may have a minimal PATH and a non-UTF-8 locale.
+async function runMacosCommand(command: string[], input = "", tts = false): Promise<string> {
+  const proc = Bun.spawn(command, {
+    env: { ...process.env, LC_CTYPE: "UTF-8" },
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (tts) activeSystemTtsProcs.add(proc);
+  try {
+    const output = Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    proc.stdin.write(input);
+    proc.stdin.end();
+    const [code, stdout, stderr] = await output;
+    if (code !== 0) throw new Error(stderr.trim() || `${command[0]} exited with code ${code}`);
+    return stdout;
+  } finally {
+    activeSystemTtsProcs.delete(proc);
+  }
+}
+
+function macosSpeechArgs(speechRate: number): string[] {
+  const rate = Number.isFinite(speechRate) && speechRate > 0 ? speechRate : 1;
+  return ["/usr/bin/say", "-f", "-", "-r", String(Math.max(80, Math.min(450, Math.round(175 * rate))))];
+}
 
 export async function speakSystemText(text: string, speechRate = 1) {
   bumpAnalyticsTtsCount();
@@ -115,6 +153,8 @@ export async function speakSystemText(text: string, speechRate = 1) {
       } finally {
         activeSystemTtsProcs.delete(proc);
       }
+    } else if (process.platform === "darwin") {
+      await runMacosCommand(macosSpeechArgs(speechRate), text, true);
     } else {
       const speed = Math.max(80, Math.min(450, Math.round(175 * speechRate)));
       const proc = Bun.spawn(["espeak-ng", "--stdin", "-s", String(speed)], {
@@ -174,6 +214,11 @@ export async function synthesizeSystemTtsToWav(text: string, speechRate = 1): Pr
       } finally {
         activeSystemTtsProcs.delete(proc);
       }
+    } else if (process.platform === "darwin") {
+      await runMacosCommand([
+        ...macosSpeechArgs(speechRate), "-o", tmpWav,
+        "--file-format=WAVE", "--data-format=LEI16@22050",
+      ], text, true);
     } else {
       const speed = Math.max(80, Math.min(450, Math.round(175 * speechRate)));
       const proc = Bun.spawn(["espeak-ng", "-w", tmpWav, "-s", String(speed), "--stdin"], {

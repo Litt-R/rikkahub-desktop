@@ -2,7 +2,7 @@
 // 用真实嵌入的 bash-bundle.tar.gz(构建脚本已产出),在隔离的临时 dataDir 里走完整落地路径。
 // paths.ts 在 import 时刻固化 dataDir,故必须先设环境变量再动态加载被测模块。
 // Windows-only:非 Windows 平台整个 describe 跳过(embedded-bash.ts 内部也拒绝)。
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,8 +10,6 @@ import { join } from "node:path";
 const testDataDir = mkdtempSync(join(tmpdir(), "rkh-embed-test-"));
 process.env.RIKKAHUB_PC_DATA_DIR = testDataDir;
 
-const mod = await import("./embedded-bash");
-const { ensureEmbeddedBash, embeddedBashAvailableSync, _resetEmbeddedBashForTest } = mod;
 const { embeddedBashDir, embeddedBashExe, embeddedBashStampPath } = await import("../../foundation/paths");
 
 afterAll(() => {
@@ -20,6 +18,15 @@ afterAll(() => {
 
 // 内嵌 bash 仅 Windows 用;非 Windows 平台跳过整个 describe(无需跑空测试)。
 describe.skipIf(process.platform !== "win32")("embedded bash 懒落地", () => {
+  type EmbeddedBash = typeof import("./embedded-bash");
+  let ensureEmbeddedBash: EmbeddedBash["ensureEmbeddedBash"];
+  let embeddedBashAvailableSync: EmbeddedBash["embeddedBashAvailableSync"];
+  let _resetEmbeddedBashForTest: EmbeddedBash["_resetEmbeddedBashForTest"];
+  beforeAll(async () => {
+    // Non-Windows tests must not import the Windows-only embedded archive.
+    ({ ensureEmbeddedBash, embeddedBashAvailableSync, _resetEmbeddedBashForTest } = await import("./embedded-bash"));
+  });
+
   test("首次前 availableSync 为 null;ensureEmbeddedBash 落地后命中且可执行", async () => {
     _resetEmbeddedBashForTest();
     rmSync(embeddedBashDir, { recursive: true, force: true });

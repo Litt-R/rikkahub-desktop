@@ -94,7 +94,7 @@ function assertValidEntryName(name: string): void {
 export function renameWorkspaceEntry(workspace: Workspace, relPath: string, newName: string): void {
   assertValidEntryName(newName);
   const path = resolveInside(workspace, relPath);
-  if (comparable(path) === comparable(workspace.root)) throw new Error("Cannot rename the workspace root");
+  if (comparable(path) === comparable(resolveInside(workspace, ""))) throw new Error("Cannot rename the workspace root");
   const target = join(dirname(path), newName);
   assertInsideWorkspace(target, workspace.root);
   // 源经 NT 安全路径:保留名残留可被"改名成正常名"救活(问题4 自愈路径);目标名已过校验必非保留名。
@@ -103,7 +103,7 @@ export function renameWorkspaceEntry(workspace: Workspace, relPath: string, newN
 
 export function deleteWorkspaceEntry(workspace: Workspace, relPath: string): void {
   const path = resolveInside(workspace, relPath);
-  if (comparable(path) === comparable(workspace.root)) throw new Error("Cannot delete the workspace root");
+  if (comparable(path) === comparable(resolveInside(workspace, ""))) throw new Error("Cannot delete the workspace root");
   // 保留名残留(问题4)必须走 NT 路径删除:Win32 语义下 rmSync 报 ENOENT 被 force 吞掉,
   // 表现为"删除成功但文件还在"的假成功。
   rmSync(reservedNameSafeFsPath(path), { recursive: true, force: true });

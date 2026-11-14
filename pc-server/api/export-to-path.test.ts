@@ -4,6 +4,9 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { defaultState } from "../app-config/defaults";
+import * as jsonStore from "../persistence/json-store";
 import { handleDataRoutes } from "./handlers/data";
 import { isLoopbackAddress, isLoopbackRequest, markRequestNetworkContext } from "./net-context";
 
@@ -65,8 +68,20 @@ describe("data/export/to-path:闸门与校验矩阵", () => {
     expect((await loopbackCall(42)).status).toBe(400);
   });
 
-  test("Windows 保留设备名 → 400;目标目录不存在 → 400", async () => {
-    expect((await loopbackCall(join(tmpdir(), "nul.zip"))).status).toBe(400);
+  test("目标目录不存在 → 400", async () => {
     expect((await loopbackCall(join(tmpdir(), "no-such-dir-9f2c", "b.zip"))).status).toBe(400);
+  });
+
+  test("Windows 保留设备名仅在 Windows 拒绝;macOS/Linux 可导出", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rkh-export-name-"));
+    const priorState = jsonStore.state;
+    jsonStore.setState(defaultState());
+    try {
+      const res = await loopbackCall(join(dir, "nul.zip"));
+      expect(res.status).toBe(process.platform === "win32" ? 400 : 200);
+    } finally {
+      jsonStore.setState(priorState);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

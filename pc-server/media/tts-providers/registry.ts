@@ -10,7 +10,7 @@
 
 import type { JsonValue, TtsProvider } from "../../foundation/types";
 
-// 仅在线(provider 需要 apiKey + endpoint);system 走 Windows System.Speech,不在此表。
+// 仅在线(provider 需要 apiKey + endpoint);system 走各平台原生 TTS,不在此表。
 export type OnlineTtsType = Exclude<TtsProvider["type"], "system">;
 
 export interface TtsProviderSpec {

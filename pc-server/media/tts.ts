@@ -274,7 +274,8 @@ export async function generateSpeechWithTtsProvider(text: string, providerId?: s
     addLog({
       providerId: provider.id,
       providerName: provider.name,
-      url: "windows:System.Speech",
+      url: process.platform === "darwin" ? "macos:say"
+        : process.platform === "win32" ? "windows:System.Speech" : "linux:espeak-ng",
       ok: true,
       status: 200,
       kind: "provider:tts",

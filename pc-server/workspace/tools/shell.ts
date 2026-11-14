@@ -16,6 +16,7 @@
 
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { reportError } from "../../observability/app-errors";
 
@@ -206,7 +207,19 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
 }
 
 export function getShellEnv(): NodeJS.ProcessEnv {
-  return { ...process.env };
+  const env = { ...process.env };
+  if (process.platform === "darwin") {
+    // Finder doesn't inherit a terminal's PATH. Keep explicit entries first,
+    // then append installed tools' conventional directories. Do not source
+    // shell profiles (which can run arbitrary startup code or change proxies).
+    const home = homedir();
+    const extra = [
+      "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin",
+      join(home, ".local/bin"), join(home, ".bun/bin"), join(home, ".cargo/bin"),
+    ].filter((dir) => existsSync(dir));
+    env.PATH = [...new Set([...(env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(":"), ...extra])].join(":");
+  }
+  return env;
 }
 
 /**

@@ -38,13 +38,9 @@ export async function handleUpdateRoutes(request: Request, _url: URL, path: stri
     // 容器化部署(Docker 等)无法通过替换二进制持久更新,直接返回 undefined,
     // 前端会提示用 docker pull 升级镜像。
     const pickAsset = (assets: NonNullable<GithubRelease["assets"]>): NonNullable<GithubRelease["assets"]>[number] | undefined => {
-      if (RUNNING_IN_CONTAINER) return undefined;
+      if (RUNNING_IN_CONTAINER || RUNTIME_PLATFORM === "mac") return undefined;
       if (RUNTIME_PLATFORM === "linux") {
         return assets.find((a) => /linux[-_]x64.*\.tar\.gz$/i.test(a.name ?? ""));
-      }
-      if (RUNTIME_PLATFORM === "mac") {
-        return assets.find((a) => /\.dmg$/i.test(a.name ?? ""))
-          ?? assets.find((a) => /(?:macos|darwin|mac)[-_]x64/i.test(a.name ?? ""));
       }
       return assets.find((a) => /x64[-_]setup\.exe$/i.test(a.name ?? ""))
         ?? assets.find((a) => /\.exe$/i.test(a.name ?? ""));
@@ -155,6 +151,9 @@ export async function handleUpdateRoutes(request: Request, _url: URL, path: stri
   // Linux: the UI calls update/apply to swap the running binary. The user explicitly confirms
   // the restart so we don't race a process that's about to be replaced.
   if (path === "update/download" && request.method === "POST") {
+    // The current macOS build is installed locally; neither the Windows
+    // installer path nor the Linux tar/apply path can install a macOS bundle.
+    if (RUNTIME_PLATFORM === "mac") return error("macOS 暂不支持应用内更新，请手动替换 .app", 400);
     // 流式下载:响应是 text/event-stream,边下载边写盘边推 progress 事件,完成推 done(含
     // 本地路径)/error。前端用 fetch + ReadableStream 解析——之前用 arrayBuffer 一次性下完
     // 才返回,前端 XHR onprogress 下载期间收不到任何字节,进度条纹丝不动。

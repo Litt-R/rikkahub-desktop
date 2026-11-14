@@ -14,7 +14,7 @@
 //    礼貌退出不可依赖。取消语义经 AbortSignal 传入,与 pi 引擎 runner 的 signal 契约对齐。
 
 import { spawn } from "node:child_process";
-import { killProcessTree } from "../workspace/tools/shell";
+import { getShellEnv, killProcessTree } from "../workspace/tools/shell";
 import { classifyExit, classifySpawnError, describeExit, type SubprocessExitInfo } from "./errors";
 
 /** stderr 摘录缓冲上限(字节)。只留尾部,防长日志撑内存。 */
@@ -100,7 +100,7 @@ export function spawnSubprocess(options: SpawnSubprocessOptions): SubprocessHand
   try {
     child = spawn(cmd, args, {
       cwd,
-      env: env ? { ...process.env, ...env } : process.env,
+      env: { ...getShellEnv(), ...env },
       // detached: POSIX 下让子进程自成进程组,杀树时按组杀(killProcessTree 负 pid);
       // Windows 下 detached 不影响(taskkill /T 按树杀),但保持一致无害。
       detached: true,

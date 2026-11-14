@@ -529,7 +529,7 @@
     "mode_manual": "Manual",
     "mode_direct": "Force direct",
     "mode_env": "Environment",
-    "mode_auto_desc": "Automatically follow the system proxy (Windows registry / GNOME settings).",
+    "mode_auto_desc": "Automatically follow the system proxy (Windows registry / macOS system settings / GNOME settings).",
     "mode_manual_desc": "Use the fixed HTTP proxy specified below.",
     "mode_direct_desc": "Ignore the system proxy entirely; all requests go direct (an escape hatch when the system proxy is broken).",
     "mode_env_desc": "Controlled by HTTPS_PROXY / HTTP_PROXY environment variables (common in container deployments).",

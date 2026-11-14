@@ -116,7 +116,7 @@ export type ProxyMode = "auto" | "manual" | "direct" | "env";
 
 export interface ProxyConfig {
   // 代理模式:
-  // - auto: 跟随系统代理(Windows 注册表 / GNOME gsettings), 配合活性探测自动降级
+  // - auto: 跟随系统代理(Windows 注册表 / macOS 系统设置 / GNOME gsettings)
   // - manual: 使用 url 指定的固定代理, 同样支持活性探测与降级
   // - direct: 强制直连, 完全忽略系统代理声明(系统代理失效时的逃生口)
   // - env: 完全由 HTTPS_PROXY/HTTP_PROXY 环境变量控制(Docker 部署), UI 只读
@@ -594,9 +594,9 @@ export interface XmlToken {
 //   builtin — 随应用分发。repo 根 fonts/ 经 Tauri resources 打到 executableDir/fonts/,
 //             跟 icons 完全同构;dev 时从 rootDir/fonts/ 读。
 //   custom  — 用户上传,存在 pc-data/fonts/(gitignored,更新不覆盖)。
-//   system  — 系统已装字体。Linux 走 `fc-list`,Windows 走 PowerShell +
+//   system  — 系统已装字体。macOS 走 AppKit, Linux 走 `fc-list`,Windows 走 PowerShell +
 //             System.Drawing.Text.InstalledFontCollection(真枚举,非硬编码清单);
-//             两者都失败才降级到 COMMON_FONTS_FALLBACK。
+//             当前平台枚举失败才降级到 COMMON_FONTS_FALLBACK。
 // 关键:@font-face 的 font-family 名由我们掌控(= 文件名 stem),所以不解析字体文件
 // 内部的 name 表——绕开了"从二进制读真实族名"这个最烦的活,也保证 @font-face 名与 CSS
 // font-family 链首项严格一致(浏览器靠这个名字匹配 @font-face 规则加载文件)。

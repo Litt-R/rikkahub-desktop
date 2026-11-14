@@ -322,7 +322,7 @@ export async function handleDataRoutes(request: Request, _url: URL, path: string
     if (!isAbsolute(targetPath) || !targetPath.toLowerCase().endsWith(".zip")) {
       return error("targetPath must be an absolute path ending in .zip", 400);
     }
-    if (isWindowsReservedName(basename(targetPath))) {
+    if (process.platform === "win32" && isWindowsReservedName(basename(targetPath))) {
       return error("targetPath must not be a reserved Windows device name", 400);
     }
     const targetDir = dirname(targetPath);

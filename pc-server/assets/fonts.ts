@@ -29,10 +29,13 @@ export const MAX_FONT_BYTES = 50 * 1024 * 1024;
 const FONT_DEFAULT_FALLBACK = "system-ui, sans-serif";
 
 // 真枚举失败时的兜底清单(Windows 锁死系统等情况)。
-const COMMON_FONTS_FALLBACK: FontEntry[] = [
+const COMMON_FONTS_FALLBACK: FontEntry[] = (process.platform === "darwin" ? [
+  "PingFang SC", "Hiragino Sans GB", "Songti SC", "Heiti SC",
+  "Helvetica", "Arial", "Menlo", "Monaco", "Times New Roman", "Courier",
+] : [
   "Microsoft YaHei", "DengXian", "Segoe UI", "SimSun", "SimHei", "KaiTi", "FangSong",
   "Consolas", "Times New Roman", "Arial", "Courier New",
-].map((name) => ({
+]).map((name) => ({
   id: `system:${name}`,
   label: name,
   cssName: name,
@@ -181,6 +184,20 @@ function readSystemFontFamilies(): string[] {
           if (name && !name.includes(":")) families.add(name);
         }
       }
+    } else if (process.platform === "darwin") {
+      // AppKit returns family names directly; no font scanning or extra tools.
+      const script = 'ObjC.import("AppKit"); JSON.stringify(ObjC.deepUnwrap($.NSFontManager.sharedFontManager.availableFontFamilies));';
+      const proc = Bun.spawnSync(["/usr/bin/osascript", "-l", "JavaScript", "-e", script], {
+        stdout: "pipe", stderr: "pipe", timeout: 5_000,
+      });
+      if (proc.exitCode === 0) {
+        const names: unknown = JSON.parse(proc.stdout.toString("utf8"));
+        if (Array.isArray(names)) {
+          for (const name of names) {
+            if (typeof name === "string" && name.trim() && !name.startsWith(".")) families.add(name.trim());
+          }
+        }
+      }
     } else if (process.platform === "win32") {
       // powershell.exe = Windows PowerShell 5.1,全 Windows 自带,System.Drawing 开箱即用。
       // InstalledFontCollection 返回干净的族名(无需解析字体二进制 name 表)。
@@ -204,7 +221,7 @@ function readSystemFontFamilies(): string[] {
 // 系统 FontEntry:剔除与 builtin/custom 同名的(用户:自带与系统重合的用自带的,不重复显示)。
 export function listSystemFonts(excludeNames: Set<string>): FontEntry[] {
   const raw = readSystemFontFamilies();
-  if (!raw) return COMMON_FONTS_FALLBACK.filter((entry) => !excludeNames.has(entry.cssName.toLowerCase()));
+  if (raw.length === 0) return COMMON_FONTS_FALLBACK.filter((entry) => !excludeNames.has(entry.cssName.toLowerCase()));
   return raw
     .filter((name) => !excludeNames.has(name.toLowerCase()))
     .map((name) => ({

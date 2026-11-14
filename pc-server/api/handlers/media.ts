@@ -137,7 +137,7 @@ export async function handleMediaRoutes(request: Request, _url: URL, path: strin
     return json({ status: "ok" });
   }
 
-  // Cancel all currently-running system-TTS PowerShell processes. Called by the floating
+  // Cancel all currently-running native system-TTS processes. Called by the floating
   // play bar's stop button so the "你点了 ✕ 但 Windows TTS 还在念" gap closes within
   // ~100 ms. Online-TTS providers don't need cancellation server-side — they're already
   // synchronous request/response, and the client aborts its fetch directly.

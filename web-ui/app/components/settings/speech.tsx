@@ -265,7 +265,7 @@ export function TtsSection({
       });
       const contentType = response.headers.get("Content-Type") ?? "";
       if (contentType.includes("application/json")) {
-        // System TTS path — Windows is speaking on-device; nothing for us to play.
+        // Legacy system TTS path — the server is speaking on-device; nothing for us to play.
         if (!mountedRef.current) {
           void api.post("tts/cancel").catch(() => undefined);
           return;

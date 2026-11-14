@@ -33,7 +33,7 @@ export async function bootstrap(): Promise<void> {
   // 2b) 工作区 LLM 日志壳(日志问题 1):包在代理拦截器外层(后安装者先执行),pi SDK 内部的
   //     LLM fetch 经 AsyncLocalStorage 上下文记入统一日志管线,与聊天引擎同一套 addLog。
   installLlmRequestLogInterceptor();
-  // R1-7:系统代理探测(reg query/gsettings)已全异步化,拦截器 per-request 只读缓存。
+  // R1-7:系统代理探测(reg query/scutil/gsettings)已全异步化,拦截器 per-request 只读缓存。
   // 这里预热一次,保证首个业务出站请求就能拿到正确的系统代理(之后 TTL 过期走
   // "陈值即用 + 后台刷新",事件循环永不被 spawn 阻塞)。
   await primeSystemProxyCache();

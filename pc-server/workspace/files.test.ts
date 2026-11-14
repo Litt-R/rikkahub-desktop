@@ -1,7 +1,7 @@
 // workspace/files.test.ts — 文件面板领域操作单测（M3-5）。reveal 不测（起系统进程）。
 
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "../foundation/types";
@@ -50,6 +50,18 @@ describe("previewWorkspaceFile", () => {
 });
 
 describe("rename/delete", () => {
+  test("符号链接别名与真实路径使用同一根目录保护", () => {
+    const alias = join(host, "ws-alias");
+    symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+    const linked = { ...workspace, root: alias };
+    for (const relPath of ["", ".", "src/.."]) {
+      expect(() => renameWorkspaceEntry(linked, relPath, "moved")).toThrow("Cannot rename the workspace root");
+      expect(() => deleteWorkspaceEntry(linked, relPath)).toThrow("Cannot delete the workspace root");
+      expect(existsSync(root)).toBe(true);
+    }
+    expect(readFileSync(join(root, "readme.md"), "utf8")).toBe("# hello");
+  });
+
   test("重命名限同目录、名称不得含分隔符;root 本身不可动", () => {
     writeFileSync(join(root, "old.txt"), "x");
     renameWorkspaceEntry(workspace, "old.txt", "new.txt");

@@ -4,6 +4,7 @@
 import { isRecord } from "./utils";
 import { RUNNING_IN_CONTAINER, RUNTIME_PLATFORM } from "./platform";
 import { defaultPreferredPort } from "./port-binding";
+import { readMacosProxySettings } from "./macos-proxy";
 import type { ProxyConfig , ProxyMode } from "./types";
 
 export let lastDetectedSystemProxy: string | undefined;
@@ -122,6 +123,7 @@ export async function detectSystemPacUrl(): Promise<string | undefined> {
       // GNOME mode='auto' 即 PAC 模式;url 可能为空(WPAD 自动发现),仍算存在 PAC。
       return url || "wpad";
     }
+    if (RUNTIME_PLATFORM === "mac") return (await readMacosProxySettings()).pacUrl;
   } catch {
     // 纯诊断增强,探测异常绝不能影响检测主流程。
   }
@@ -131,6 +133,7 @@ export async function detectSystemPacUrl(): Promise<string | undefined> {
 export async function detectSystemProxy(): Promise<string | undefined> {
   if (RUNTIME_PLATFORM === "win") return readWindowsSystemProxy();
   if (RUNTIME_PLATFORM === "linux" && !RUNNING_IN_CONTAINER) return readGnomeProxy();
+  if (RUNTIME_PLATFORM === "mac") return (await readMacosProxySettings()).proxy;
   return undefined;
 }
 
@@ -203,7 +206,7 @@ export function resolveEffectiveProxy(cfg: ProxyConfig): { url: string | undefin
     return { url: undefined, source: "none" };
   }
 
-  // mode === "auto": 跟随系统代理（Windows 注册表 / GNOME gsettings）
+  // mode === "auto": 跟随系统代理（Windows 注册表 / macOS scutil / GNOME gsettings）
   const system = readSystemProxy();
   lastDetectedSystemProxy = system;
   if (system) return { url: system, source: "system" };

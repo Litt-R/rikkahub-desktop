@@ -529,7 +529,7 @@
     "mode_manual": "手动指定",
     "mode_direct": "强制直连",
     "mode_env": "环境变量",
-    "mode_auto_desc": "自动跟随系统代理（Windows 注册表 / GNOME 设置）。",
+    "mode_auto_desc": "自动跟随系统代理（Windows 注册表 / macOS 系统设置 / GNOME 设置）。",
     "mode_manual_desc": "使用下方指定的固定 HTTP 代理。",
     "mode_direct_desc": "完全忽略系统代理，所有请求直连（系统代理失效时的逃生口）。",
     "mode_env_desc": "由 HTTPS_PROXY / HTTP_PROXY 环境变量控制（容器部署常用）。",
