@@ -100,6 +100,8 @@ The following organizations sponsor Rikkahub's ongoing development. Our thanks t
 
 ## 🏗️ Build from source
 
+For local Apple Silicon development and `.app` bundles, see the [macOS guide](docs/macos.md).
+
 Building the installer locally requires the following — **for developers only**:
 
 - [Bun](https://bun.sh/) 1.1+

@@ -38,6 +38,8 @@ use tauri_plugin_shell::{
 #[derive(Debug, Clone)]
 struct UiStartup {
     port: u16,
+    // macOS navigates directly to ui_entry; retain the shared startup protocol.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     ui_origin: String,
     ui_entry: String,
 }
@@ -111,7 +113,7 @@ fn shutdown_sidecar(state: &SidecarState) {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct UserConfig {
-    /// Absolute path to where pc-data should live. None = default (next to exe).
+    /// Absolute path to where pc-data should live. None = platform default.
     data_dir: Option<String>,
     /// Whether closing the main window hides to the tray (true) or quits (false).
     /// None = default-on, matching the convention of most modern desktop clients.
@@ -241,7 +243,7 @@ fn consume_installer_data_dir_handoff(app: &AppHandle) {
 ///   2. value persisted in user-config.json (written only by this shell — either the
 ///      Settings UI's set_data_dir command, or the startup merge of the installer's
 ///      plain-text handoff file; the installer never writes the JSON itself)
-///   3. `pc-data/` next to the running exe (portable default)
+///   3. macOS Application Support, or `pc-data/` next to the exe elsewhere
 fn resolve_data_dir(app: &AppHandle) -> PathBuf {
     if let Ok(env) = std::env::var("RIKKAHUB_PC_DATA_DIR") {
         if !env.trim().is_empty() {
@@ -253,6 +255,12 @@ fn resolve_data_dir(app: &AppHandle) -> PathBuf {
         if !dir.trim().is_empty() {
             return PathBuf::from(dir);
         }
+    }
+    // An .app bundle is replaceable (and may be read-only). Keep macOS user data
+    // in Application Support; preserve the portable default on other platforms.
+    #[cfg(target_os = "macos")]
+    if let Ok(dir) = app.path().app_data_dir() {
+        return dir.join("pc-data");
     }
     exe_dir().join("pc-data")
 }
@@ -335,6 +343,15 @@ fn spawn_sidecar(
         // 启用——否则无头实例会在可能是生产端口的旧端口上挂监听。
         .args(["--no-open", "--ui-shell"])
         .env("RIKKAHUB_PC_DATA_DIR", &data_dir);
+    #[cfg(target_os = "macos")]
+    let cmd = cmd
+        .env("RIKKAHUB_PARENT_PID", std::process::id().to_string())
+        .env(
+            "RIKKAHUB_RESOURCE_DIR",
+            app.path()
+                .resource_dir()
+                .map_err(|e| format!("Failed to resolve app resources: {e}"))?,
+        );
         // NOTE: we deliberately do NOT pass PORT here. The sidecar now picks its own port
         // (8080 by default, walking up on conflict) and reports the actual value via the
         // `RIKKAHUB_PORT:<n>` stdout marker parsed below. Hardcoding 8080 would make the
@@ -603,10 +620,9 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
         .icon(icon)
         .tooltip(strings.tooltip)
         .menu(&menu)
-        // Left-click is reserved for restoring the window (see on_tray_icon_event).
-        // Without this, the default behavior would pop the menu on left-click and
-        // our restore handler would never fire.
-        .show_menu_on_left_click(false)
+        // macOS uses the standard status-menu click. Other platforms reserve
+        // left-click for restoring the window (see on_tray_icon_event).
+        .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id.as_ref() {
             "tray_show" => show_main_window(app),
             "tray_quit" => app.exit(0),
@@ -762,6 +778,18 @@ pub fn run() {
             // 记忆大小"的割裂。放在 setup 最前,保持"启动即见窗"的原有体验。
             if let Some(window) = handle.get_webview_window("main") {
                 let _ = window.show();
+                #[cfg(target_os = "macos")]
+                let _ = window.set_focus();
+                #[cfg(all(debug_assertions, target_os = "macos"))]
+                eprintln!(
+                    "[macos] main window: visible={:?}, size={:?}, position={:?}, scale={:?}, focused={:?}, minimized={:?}",
+                    window.is_visible(),
+                    window.inner_size(),
+                    window.outer_position(),
+                    window.scale_factor(),
+                    window.is_focused(),
+                    window.is_minimized(),
+                );
             }
 
             // 安装器数据目录交接必须先于 spawn_sidecar(内部 resolve_data_dir 决定
@@ -806,7 +834,8 @@ pub fn run() {
 
                 wait_handle.emit("sidecar://ready", true).ok();
 
-                // 端口标记到达 = Bun.serve 已在监听。窗口初始 URL（tauri.conf.json）指向
+                // 端口标记到达 = Bun.serve 已在监听。macOS 必须原生导航，见下方说明。
+                // 其他平台沿用以下 JS 守卫。窗口初始 URL（tauri.conf.json）指向
                 // 内嵌的 splash.html（本地资源，零网络依赖——旧实现直指 8080，启动空窗期
                 // 必然先落在 WebView2 的「无法访问此页面」，几乎每次启动都闪一次报错页）。
                 // 守卫按三面旗判定：
@@ -821,14 +850,41 @@ pub fn run() {
                 // splash 页视觉与 SPA 的 HydrateFallback 逐像素一致,用户感知为一整段连续
                 // 的品牌启动屏。
                 if let Some(window) = wait_handle.get_webview_window("main") {
-                    let js = format!(
-                        "(function(){{var e={e:?},f={f:?};try{{if(window.__RIKKAHUB_APP__&&location.origin===f)return;if(window.__RIKKAHUB_RELAY__||window.__RIKKAHUB_NAV__)return;window.__RIKKAHUB_NAV__=1;location.replace(window.__RIKKAHUB_SPLASH__?e:f)}}catch(x){{location.replace(f)}}}})()",
-                        e = startup.ui_entry,
-                        f = startup.ui_origin,
-                    );
-                    for _ in 0..3 {
-                        let _ = window.eval(&js);
-                        thread::sleep(Duration::from_millis(700));
+                    // WKWebView queues eval calls until its first successful load.
+                    // In development the initial URL can fail before the sidecar
+                    // starts, so an eval-based redirect would remain queued forever.
+                    // Navigate natively once the backend is listening, preserving
+                    // the server-selected entry (including an origin relay).
+                    #[cfg(target_os = "macos")]
+                    match startup.ui_entry.parse() {
+                        Ok(url) => {
+                            if let Err(err) = window.navigate(url) {
+                                show_startup_error(
+                                    &wait_handle,
+                                    &format!("Failed to open application page: {err}"),
+                                );
+                                wait_handle.exit(1);
+                            }
+                        }
+                        Err(err) => {
+                            show_startup_error(
+                                &wait_handle,
+                                &format!("Invalid application entry URL: {err}"),
+                            );
+                            wait_handle.exit(1);
+                        }
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let js = format!(
+                            "(function(){{var e={e:?},f={f:?};try{{if(window.__RIKKAHUB_APP__&&location.origin===f)return;if(window.__RIKKAHUB_RELAY__||window.__RIKKAHUB_NAV__)return;window.__RIKKAHUB_NAV__=1;location.replace(window.__RIKKAHUB_SPLASH__?e:f)}}catch(x){{location.replace(f)}}}})()",
+                            e = startup.ui_entry,
+                            f = startup.ui_origin,
+                        );
+                        for _ in 0..3 {
+                            let _ = window.eval(&js);
+                            thread::sleep(Duration::from_millis(700));
+                        }
                     }
                 }
             });
@@ -863,6 +919,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen { .. } = &event {
+                show_main_window(app_handle);
+            }
             if let RunEvent::ExitRequested { .. } = event {
                 if let Some(state) = app_handle.try_state::<SidecarState>() {
                     shutdown_sidecar(&state);

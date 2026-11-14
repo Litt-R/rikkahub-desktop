@@ -11,7 +11,11 @@ import process from "node:process";
 // 图标/开发数据目录全部失联（打包 exe 走 executableDir 分支不受影响）。若再移动本文件必须同步调整。
 export const sourceRootDir = resolve(import.meta.dir, "..", "..");
 export const executableDir = dirname(process.execPath);
-export const rootDir = existsSync(join(executableDir, "web-ui")) ? executableDir : sourceRootDir;
+// macOS .app 的资源位于 Contents/Resources，而 sidecar 位于 Contents/MacOS。
+// 由桌面壳传入 Tauri 实际解析的资源目录，避免依赖源码目录或启动工作目录。
+export const rootDir = process.env.RIKKAHUB_RESOURCE_DIR
+  ? resolve(process.env.RIKKAHUB_RESOURCE_DIR)
+  : existsSync(join(executableDir, "web-ui")) ? executableDir : sourceRootDir;
 export const dataDir = resolve(process.env.RIKKAHUB_PC_DATA_DIR ?? join(rootDir, "pc-data"));
 
 export const filesDir = join(dataDir, "files");

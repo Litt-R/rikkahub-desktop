@@ -485,6 +485,20 @@ process.on("SIGTERM", shutdown);
 // Unix 终端断开。dev 形态下"直接关终端"是高频操作,不挂就走硬杀留假崩溃档(日志问题 2)。
 process.on("SIGHUP", shutdown);
 
+// macOS has no Windows Job Object: a dev rebuild or a crashed shell can otherwise
+// orphan the sidecar, leaving its data lock held. The shell explicitly opts in;
+// standalone servers are unaffected. Reuse the normal flush/lock-release path.
+const desktopParentPid = Number(process.env.RIKKAHUB_PARENT_PID);
+if (process.platform === "darwin" && Number.isSafeInteger(desktopParentPid) && desktopParentPid > 1) {
+  const parentWatch = setInterval(() => {
+    if (process.ppid === desktopParentPid) return;
+    clearInterval(parentWatch);
+    console.log("[shutdown] desktop parent exited");
+    void shutdown();
+  }, 500);
+  parentWatch.unref();
+}
+
 if (willOpenBrowser) {
   const opener = process.platform === "win32" ? "cmd" : "sh";
   // 接力生效时先开旧 origin 的接力页(视觉即启动屏,读出旧界面状态后自动跳新 origin);

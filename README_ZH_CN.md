@@ -116,6 +116,8 @@ Git Bash 的 `link.exe` 跟 MSVC 链接器冲突，以及项目路径含非 ASCI
 
 ### 开发流程
 
+**macOS（Apple Silicon）**：本机桌面开发与 `.app` 打包见 [macOS 开发说明](docs/macos.md)。
+
 ```powershell
 # 后端在 http://localhost:17455
 cd pc-server

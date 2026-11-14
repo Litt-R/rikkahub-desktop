@@ -14,7 +14,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "bun run --cwd ../pc-server compile && tauri build",
-    "tauri:build:shell-only": "tauri build"
+    "tauri:build:shell-only": "tauri build",
+    "macos:dev": "bun run scripts/macos.ts dev",
+    "macos:build": "bun run scripts/macos.ts build"
   },
   "dependencies": {
     "@react-router/node": "7.13.0",
